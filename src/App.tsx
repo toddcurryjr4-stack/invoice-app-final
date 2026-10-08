@@ -169,7 +169,24 @@ function App() {
   }
 
   useEffect(() => {
-    refresh().catch((error) => setMessage(error.message));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    function load(attempt = 0) {
+      refresh().catch((error: unknown) => {
+        if (cancelled) return;
+        const temporaryFailure = error instanceof TypeError || (error instanceof ApiError && error.status >= 500);
+        if (temporaryFailure && attempt < 8) {
+          retryTimer = setTimeout(() => load(attempt + 1), 500);
+        } else {
+          setMessage(error instanceof Error ? error.message : "Could not load invoice data.");
+        }
+      });
+    }
+    load();
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
   }, []);
 
   useEffect(() => {
